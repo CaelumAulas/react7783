@@ -5,82 +5,90 @@ import Dashboard from '../../components/Dashboard'
 import Widget from '../../components/Widget'
 import TrendsArea from '../../components/TrendsArea'
 import Tweet from '../../components/Tweet'
+import Modal from '../../components/Modal'
 import Helmet from 'react-helmet'
-
+import PropTypes from 'prop-types'
+import * as TweetsActions from '../../actions/TweetsActions'
 
 class Home extends Component {
     constructor() {
         super()
         this.state = {
             novoTweet: '',
-            tweets: []
+            tweets: [],
+            tweetAtivo: {}
         }
         // this.adicionarTweet = this.adicionarTweet.bind(this)
     }
 
+    static contextTypes = {
+        store: PropTypes.object
+    }
+
     componentDidMount() {
-        fetch(`http://localhost:3001/tweets?X-AUTH-TOKEN=${localStorage.getItem('TOKEN')}`)
-            .then((respostaDoServidor) => {
-                return respostaDoServidor.json()
+        this.context.store.subscribe(() => {
+            // console.log('To só de olho nesse dispatch feito na store')
+            const tweetsVindoDaStore = this.context.store.getState().tweets
+            this.setState({
+                tweets: tweetsVindoDaStore
             })
-            .then((tweetsVindoDoServidor) => {
-                this.setState({
-                    tweets: tweetsVindoDoServidor,
-                    bolinha: 'xablau'
-                })
-            })
+        })
+        // TweetsActions.carregaTweets(this.context.store.dispatch)
+        this.context.store.dispatch(TweetsActions.carregaTweets())
+        // Testem esse aqui
+        // this.context.store.dispatch({ type: 'tudomais' })
+        // this.context.store.dispatch(function(dispatch) {
+        //     console.log(dispatch)
+        // })
+
     }
 
     adicionarTweet = (event) => {
         // Previne o carregamento
         event.preventDefault()
-        // Adicionar na tela: O conteudo do tweet no formato de um <Tweet />
-
-
         const novoTweet = this.state.novoTweet // Copia do valor¸        
-
-        fetch(`http://localhost:3001/tweets?X-AUTH-TOKEN=${localStorage.getItem('TOKEN')}`, {
-            method: 'POST',
-            headers: {
-                'Content-type': 'application/json'
-            },
-            body: JSON.stringify({ conteudo: novoTweet })
-        })
-        .then((respostaDoServidor) => {
-            console.log(respostaDoServidor.status)
-            if(respostaDoServidor.status === 201) {
-                return respostaDoServidor.json()
-            }
-        })
-        .then((tweetVindoDoServidor) => {
-            console.log('Tweets chegaram')
-            this.setState({
-                novoTweet: '',
-                tweets: [tweetVindoDoServidor ,...this.state.tweets]
-            })
-            console.log(tweetVindoDoServidor)
-        })
-
-        // function setState() {
-            // this.state.tweets.push('Texto qualquer')
-            // this.render()
-        // }
+        this.context.store.dispatch(TweetsActions.adicionaTweet(novoTweet))
     }
 
-    removerTweet = (idDoTweetQueVaiSumir) => {
+    // removerTweet = (idDoTweetQueVaiSumir) => {
+    //     fetch(`http://localhost:3001/tweets/${idDoTweetQueVaiSumir}?X-AUTH-TOKEN=${localStorage.getItem('TOKEN')}`, {
+    //         method: 'DELETE'
+    //     })
+    //     .then(( respostaDoServidor ) => respostaDoServidor.json() )
+    //     .then(( respostaEmObjeto ) => {
+    //         const listaAtualizada = this.state.tweets.filter((tweetInteiro) => {
+    //             return tweetInteiro._id !== idDoTweetQueVaiSumir
+    //         })
+    //         this.setState({
+    //             tweets: listaAtualizada
+    //         })  
+    //     })
+    // }
 
-        fetch(`http://localhost:3001/tweets/${idDoTweetQueVaiSumir}?X-AUTH-TOKEN=${localStorage.getItem('TOKEN')}`, {
-            method: 'DELETE'
-        })
-        .then(( respostaDoServidor ) => respostaDoServidor.json() )
-        .then(( respostaEmObjeto ) => {
-            const listaAtualizada = this.state.tweets.filter((tweetInteiro) => {
-                return tweetInteiro._id !== idDoTweetQueVaiSumir
-            })
+    fechaModal = (evento) => {
+        console.log('que q taonteceno', )
+        const isModal = evento.target.classList.contains('modal')
+        if(isModal) {
             this.setState({
-                tweets: listaAtualizada
-            })  
-        })
+                tweetAtivo: {}
+            })
+        }
+    }
+
+    abreModal = (idDoTweetQueVaiNoModal, evento) => { 
+        
+        const isDentroDoTweetFooter = evento.target.closest('.tweet__footer')
+
+        if(!isDentroDoTweetFooter) {
+            // Filtrar qual item vai ficar no tweetAtivo
+            const tweetQueVaiNoModal = this.state.tweets.find( (tweetAtual) => { 
+                return tweetAtual._id === idDoTweetQueVaiNoModal
+            })
+            console.log(tweetQueVaiNoModal)
+            this.setState({
+                tweetAtivo: tweetQueVaiNoModal
+            })            
+        }
     }
 
   render() {
@@ -122,17 +130,19 @@ class Home extends Component {
             <Dashboard posicao="centro">
                 <Widget>
                     <div className="tweetsArea">
+                        { Boolean(this.state.tweets.length) || 'Carregando...' }
                         {   
                             // Dados passados para o map: ['Tweet 1', 'Tweet 2']
                             this.state.tweets.map((tweetAtual, indice) => {
                                 // console.log(tweetAtual)
                                 return <Tweet
-                                            key={indice}
+                                            key={tweetAtual._id}
                                             _id={tweetAtual._id}
                                             totalLikes={tweetAtual.totalLikes}
                                             texto={tweetAtual.conteudo}
                                             likeado={tweetAtual.likeado}
                                             removeHandler={this.removerTweet}
+                                            abreModalHandler={(event) => this.abreModal(tweetAtual._id, event)}
                                             removivel={tweetAtual.removivel}
                                             usuario={tweetAtual.usuario} />
                             }) 
@@ -148,15 +158,37 @@ class Home extends Component {
             </Dashboard>
         </div>
 
-        <Widget>
-            <Tweet
-                _id={'XPOASOSPDJAS'}
-                texto={ 'Xablau' }
-                usuario={ {foto: 'x', nome: 'ansan', login:'x'} }/>
-        </Widget>
+        <Modal
+                isAberto={Boolean(this.state.tweetAtivo._id)}
+                fechaModalHandler={this.fechaModal}>
+            {
+                this.state.tweetAtivo._id &&
+                    <Widget>
+                        <Tweet 
+                            _id={this.state.tweetAtivo._id}
+                            texto={this.state.tweetAtivo.conteudo}
+                            likeado={this.state.tweetAtivo.likeado}
+                            removivel={this.state.tweetAtivo.removivel}
+                            totalLikes={this.state.tweetAtivo.totalLikes}
+                            usuario={this.state.tweetAtivo.usuario}/>
+                    </Widget>
+            }
+        </Modal>
+
+        {
+            this.context.store.getState().notification &&
+            <div
+                className="notificacaoMsg"
+                onAnimationEnd={ () => this.context.store.dispatch({ type: 'LIMPA_NOTIFICACAO' }) }>
+                {this.context.store.getState().notification}
+            </div>
+        }
+
       </Fragment>
     );
   }
 }
+
+
 
 export default Home;
